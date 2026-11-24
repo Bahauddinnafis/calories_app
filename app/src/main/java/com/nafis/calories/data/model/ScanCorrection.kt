@@ -7,9 +7,15 @@ data class IngredientCorrection(
     val weightG: Double
 )
 
+data class AddOnSelection(
+    val addOnId: String,
+    val weightG: Double
+)
+
 data class ScanCorrection(
     val mealName: String,
-    val ingredients: List<IngredientCorrection>
+    val ingredients: List<IngredientCorrection>,
+    val addOns: List<AddOnSelection> = emptyList()
 ) {
     val totalWeightG: Double get() = ingredients.sumOf { it.weightG }
 }

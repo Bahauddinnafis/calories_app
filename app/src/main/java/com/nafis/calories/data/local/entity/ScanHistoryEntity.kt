@@ -68,8 +68,49 @@ data class ScanHistoryEntity(
 
     // Added in DB version 6. The default must match the migration's DEFAULT for Room's schema check.
     @ColumnInfo(defaultValue = "0")
-    val isUserCorrected: Boolean = false
+    val isUserCorrected: Boolean = false,
+
+    // Added in DB version 9: backend notes and cloud sync bookkeeping.
+    val aiNoticeText: String? = null,
+    /** JSON array of [com.nafis.calories.data.model.SuggestedAddOn] offered by the backend. */
+    @ColumnInfo(defaultValue = "'[]'")
+    val addOnsJson: String = "[]",
+    /** scan / recommendation / product / manual; null on rows saved before version 9. */
+    val logSource: String? = null,
+    /** scan_id, meal_id or product_id the entry came from. */
+    val referenceId: String? = null,
+    /** ID assigned by the backend once the entry is uploaded. */
+    val remoteId: String? = null,
+    @ColumnInfo(defaultValue = "'pending'")
+    val syncStatus: String = SYNC_PENDING,
+    /** Bumped on every local change so an in-flight upload can't mark newer edits as synced. */
+    @ColumnInfo(defaultValue = "0")
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    // Added in DB version 10. aiNoticeText above now holds the AI disclaimer only.
+    val nutritionNote: String? = null
 ) {
+    /** Source of the entry, inferred from the scanId prefix for rows saved before version 9. */
+    val resolvedLogSource: String
+        get() = logSource ?: when {
+            scanId.startsWith("rec_") -> SOURCE_RECOMMENDATION
+            scanId.startsWith("product_") -> SOURCE_PRODUCT
+            scanId.startsWith("manual_") -> SOURCE_MANUAL
+            else -> SOURCE_SCAN
+        }
+
+    val hasImage: Boolean get() = imagePath.isNotBlank()
+
+    companion object {
+        const val SYNC_PENDING = "pending"
+        const val SYNC_SYNCED = "synced"
+
+        const val SOURCE_SCAN = "scan"
+        const val SOURCE_RECOMMENDATION = "recommendation"
+        const val SOURCE_PRODUCT = "product"
+        const val SOURCE_MANUAL = "manual"
+    }
+
     /** Factor that turns the stored (whole-photo) totals into what the user actually ate. */
     val consumedFactor: Double
         get() {

@@ -4,17 +4,19 @@ import com.nafis.calories.data.model.Ingredient
 import com.nafis.calories.data.model.Nutrition
 import com.nafis.calories.data.model.NutritionSource
 import com.nafis.calories.data.model.ScanError
+import com.nafis.calories.data.model.ScanNotes
 import com.nafis.calories.data.model.ScanResult
 import com.nafis.calories.data.model.ScanStatus
 import com.nafis.calories.data.model.ServingNormalizer
+import com.nafis.calories.data.model.SuggestedAddOn
 import com.nafis.calories.data.remote.dto.*
 
 /** Mapper object to convert backend DTOs to domain models safely. */
 object ScanMapper {
 
     fun toDomain(dto: ScanResponseDto): ScanResult {
-        val prov = dto.nutritionProvenance
-        val aiNotice = prov?.aiNotice?.id ?: prov?.aiNotice?.en
+        val aiNotice = dto.aiNotice?.trim()?.takeIf { it.isNotEmpty() } ?: dto.nutritionProvenance?.aiNoticeText
+        val uncertaintyNotes = dto.analysis.uncertaintyNotes.orEmpty()
         val ingredients = dto.ingredients.orEmpty().map { it.toDomain() }
         val totals = dto.totals.toDomain()
         val totalsComplete = dto.totals.complete
@@ -40,12 +42,20 @@ object ScanMapper {
             missingNutrients = dto.totals.missingNutrients.orEmpty(),
             overallConfidence = dto.analysis.overallConfidence,
             isUserCorrected = dto.analysis.isUserCorrected == true,
-            uncertaintyNotes = dto.analysis.uncertaintyNotes.orEmpty(),
-            displayAiNotice = prov?.displayAiNotice ?: false,
-            aiNoticeText = aiNotice,
+            uncertaintyNotes = uncertaintyNotes,
+            personalNutritionNote = ScanNotes.personalNote(dto.nutritionNote, uncertaintyNotes),
+            aiDisclaimerText = ScanNotes.aiDisclaimer(aiNotice),
             status = ScanStatus.resolve(dto.status, ingredients, totals, totalsComplete),
-            errors = dto.errors.orEmpty().map { it.toDomain() }
+            errors = dto.errors.orEmpty().map { it.toDomain() },
+            suggestedAddOns = dto.suggestedAddOns.orEmpty().mapNotNull { it.toDomain() }
         )
+    }
+
+    private fun SuggestedAddOnDto.toDomain(): SuggestedAddOn? {
+        val id = addOnId?.takeIf { it.isNotBlank() } ?: return null
+        val label = name?.takeIf { it.isNotBlank() } ?: return null
+        val weight = defaultWeightG?.takeIf { it > 0.0 } ?: return null
+        return SuggestedAddOn(addOnId = id, name = label, defaultWeightG = weight, energyKcal = energyKcal)
     }
 
     private fun ScanErrorDto.toDomain(): ScanError {
@@ -104,9 +114,10 @@ object ScanMapper {
     }
 
     private fun NutritionSourceDto.toDomain(): NutritionSource {
+        val resolvedName = this.name?.takeIf { it.isNotBlank() } ?: this.sourceName ?: "Estimasi AI"
         return NutritionSource(
-            sourceName = this.sourceName,
-            sourceVersion = this.sourceVersion
+            sourceName = resolvedName,
+            sourceVersion = this.sourceVersion ?: ""
         )
     }
 }

@@ -20,6 +20,13 @@ import java.io.ByteArrayOutputStream
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
+/** Today's remaining budget, sent with a scan so the backend can personalise its nutrition note. */
+data class ScanDailyContext(
+    val remainingKcal: Double,
+    val remainingProteinG: Double,
+    val goal: String
+)
+
 class FoodAnalysisService {
 
     private val api = RetrofitClient.api
@@ -31,11 +38,12 @@ class FoodAnalysisService {
         private const val MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
     }
 
-    suspend fun scanFood(bitmap: Bitmap): Result<ScanResult> = withContext(Dispatchers.IO) {
+    suspend fun scanFood(bitmap: Bitmap, dailyContext: ScanDailyContext? = null): Result<ScanResult> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Starting backend food scan")
 
-            val imageBytes = compressBitmap(bitmap)
+            val scaledBitmap = scaleBitmapDown(bitmap, 1536)
+            val imageBytes = compressBitmap(scaledBitmap)
             Log.d(TAG, "Image compressed: ${imageBytes.size} bytes")
 
             if (imageBytes.size > MAX_IMAGE_SIZE_BYTES) {
@@ -51,7 +59,15 @@ class FoodAnalysisService {
                 requestBody
             )
 
-            parseScanResponse(api.scanFood(imagePart))
+            val textType = "text/plain".toMediaTypeOrNull()
+            parseScanResponse(
+                api.scanFood(
+                    image = imagePart,
+                    remainingKcal = dailyContext?.remainingKcal?.toString()?.toRequestBody(textType),
+                    remainingProteinG = dailyContext?.remainingProteinG?.toString()?.toRequestBody(textType),
+                    goal = dailyContext?.goal?.toRequestBody(textType)
+                )
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Scan failed", e)
             Result.failure(Exception(handleException(e)))
@@ -69,6 +85,16 @@ class FoodAnalysisService {
                 Result.failure(Exception(handleException(e)))
             }
         }
+
+    /** Preview of a correction (`POST /api/v1/nutrition/estimate`); nothing is saved. */
+    suspend fun estimate(correction: ScanCorrection): Result<ScanResult> = withContext(Dispatchers.IO) {
+        try {
+            parseScanResponse(api.estimateNutrition(RecalculateRequestDto.from(correction)))
+        } catch (e: Exception) {
+            Log.w(TAG, "Estimate failed", e)
+            Result.failure(Exception(handleException(e)))
+        }
+    }
 
     private fun parseScanResponse(response: Response<ResponseBody>): Result<ScanResult> {
         val body = response.body()
@@ -98,6 +124,24 @@ class FoodAnalysisService {
             Log.e(TAG, "Health check failed", e)
             false
         }
+    }
+
+    private fun scaleBitmapDown(bitmap: Bitmap, maxDimension: Int = 1536): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        if (width <= maxDimension && height <= maxDimension) return bitmap
+
+        val ratio = width.toFloat() / height.toFloat()
+        val targetWidth: Int
+        val targetHeight: Int
+        if (width > height) {
+            targetWidth = maxDimension
+            targetHeight = (maxDimension / ratio).toInt()
+        } else {
+            targetHeight = maxDimension
+            targetWidth = (maxDimension * ratio).toInt()
+        }
+        return Bitmap.createScaledBitmap(bitmap, targetWidth.coerceAtLeast(1), targetHeight.coerceAtLeast(1), true)
     }
 
     private fun compressBitmap(bitmap: Bitmap): ByteArray {

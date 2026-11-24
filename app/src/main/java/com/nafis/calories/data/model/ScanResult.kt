@@ -1,6 +1,9 @@
 package com.nafis.calories.data.model
 
 import kotlin.math.abs
+import kotlin.math.roundToInt
+
+fun Double?.formatKcalInt(): Int = this?.roundToInt() ?: 0
 
 /** Domain model representing backend nutrition scan results. */
 data class ScanResult(
@@ -17,17 +20,40 @@ data class ScanResult(
     val missingNutrients: List<String>,
     val overallConfidence: Double,
     val uncertaintyNotes: List<String>,
-    val displayAiNotice: Boolean = false,
-    val aiNoticeText: String? = null,
+    /** Shown in the "Catatan Gizi" card; null hides the card. */
+    val personalNutritionNote: String? = null,
+    /** Small AI-estimation disclaimer under the item list; null for entries logged without AI. */
+    val aiDisclaimerText: String? = null,
     val status: ScanStatus = ScanStatus.COMPLETED,
     val errors: List<ScanError> = emptyList(),
     val timestamp: Long = System.currentTimeMillis(),
     val consumedWeightG: Double? = null,
     val mealType: MealType? = null,
-    val isUserCorrected: Boolean = false
+    val isUserCorrected: Boolean = false,
+    /** Common hidden-calorie add-ons for this dish, provided by the backend. */
+    val suggestedAddOns: List<SuggestedAddOn> = emptyList()
 ) {
     val defaultConsumedWeightG: Double
-        get() = (singleServingWeightG?.takeIf { isMultiUnit } ?: servingWeightG).coerceAtLeast(1.0)
+        get() {
+            if (singleServingWeightG != null && singleServingWeightG > 0.0) {
+                return singleServingWeightG
+            }
+            return if (servingWeightG > 250.0) {
+                (servingWeightG / 5.0).coerceIn(80.0, 150.0)
+            } else {
+                servingWeightG.coerceAtLeast(1.0)
+            }
+        }
+
+    val effectiveConsumedWeightG: Double
+        get() = consumedWeightG ?: defaultConsumedWeightG
+
+    val effectiveConsumedNutrition: Nutrition
+        get() {
+            val baseFull = servingWeightG.takeIf { it > 0.0 } ?: defaultConsumedWeightG
+            val ratio = (effectiveConsumedWeightG / baseFull).coerceIn(0.05, 5.0)
+            return totalNutrition.scaled(ratio)
+        }
 
     val confidenceLevel: ConfidenceLevel?
         get() = ConfidenceLevel.from(overallConfidence)
@@ -108,6 +134,28 @@ enum class MealType(val key: String, val label: String) {
         }
     }
 }
+
+/** Resolves the two separate scan texts: personal nutrition note vs. AI disclaimer. */
+object ScanNotes {
+    const val DEFAULT_AI_DISCLAIMER = "Estimasi AI — sesuaikan porsi jika diperlukan."
+
+    /** `nutrition_note`, or the uncertainty notes joined when the backend sent none. */
+    fun personalNote(nutritionNote: String?, uncertaintyNotes: List<String>): String? =
+        nutritionNote?.trim()?.takeIf { it.isNotEmpty() }
+            ?: uncertaintyNotes.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+                .joinToString(" ").takeIf { it.isNotEmpty() }
+
+    fun aiDisclaimer(aiNotice: String?): String =
+        aiNotice?.trim()?.takeIf { it.isNotEmpty() } ?: DEFAULT_AI_DISCLAIMER
+}
+
+/** A hidden-calorie add-on (e.g. gravy, crackers) the backend suggests for a dish. */
+data class SuggestedAddOn(
+    val addOnId: String,
+    val name: String,
+    val defaultWeightG: Double,
+    val energyKcal: Double?
+)
 
 data class ScanError(
     val stage: String?,
@@ -209,20 +257,21 @@ object ServingNormalizer {
             unitCount = 1
         )
 
-        val count = unitCount ?: return fallback
-        val single = singleServingWeightG ?: return fallback
-        if (totalWeightG <= 0.0 || count <= 1 || single <= 0.0) return fallback
-        if (single > totalWeightG) return fallback
+        if (singleServingWeightG == null || singleServingWeightG <= 0.0) {
+            return fallback
+        }
 
-        // Backend rounds single to 0.1 g, so allow that rounding error per unit as well.
-        val tolerance = maxOf(totalWeightG * RELATIVE_TOLERANCE, 0.05 * count)
-        if (abs(single * count - totalWeightG) > tolerance) return fallback
+        val count = unitCount ?: kotlin.math.round(totalWeightG / singleServingWeightG).toInt().coerceAtLeast(1)
+        val expectedTotal = singleServingWeightG * count
+        if (abs(expectedTotal - totalWeightG) / totalWeightG <= RELATIVE_TOLERANCE) {
+            return ServingEstimate(
+                totalWeightG = totalWeightG,
+                singleServingWeightG = singleServingWeightG,
+                unitName = unitName?.takeIf { it.isNotBlank() } ?: DEFAULT_UNIT_NAME,
+                unitCount = count
+            )
+        }
 
-        return ServingEstimate(
-            totalWeightG = totalWeightG,
-            singleServingWeightG = single,
-            unitName = unitName?.takeIf { it.isNotBlank() } ?: DEFAULT_UNIT_NAME,
-            unitCount = count
-        )
+        return fallback
     }
 }

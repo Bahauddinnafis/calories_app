@@ -14,10 +14,12 @@ enum class NutrientLevel(
     HIGH("Tinggi", "Cukup besar dari batas harian, sebaiknya dibatasi")
 }
 
+fun Double?.formatKcalInt(): Int = this?.roundToInt() ?: 0
+
 object NutritionFormatter {
 
     fun formatEnergy(value: Double?): String {
-        return value?.roundToInt()?.toString() ?: "-"
+        return value.formatKcalInt().toString()
     }
 
     fun formatMacro(value: Double?): String {

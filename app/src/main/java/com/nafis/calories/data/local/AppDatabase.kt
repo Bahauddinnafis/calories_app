@@ -11,7 +11,7 @@ import com.nafis.calories.data.local.entity.ScanHistoryEntity
 
 @Database(
     entities = [ScanHistoryEntity::class],
-    version = 7,
+    version = 10,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -35,6 +35,34 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Versions 7 and 8 were version bumps without schema changes.
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) = Unit
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) = Unit
+        }
+
+        /** Backend notes, suggested add-ons, and cloud sync bookkeeping. Existing rows start as pending. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN aiNoticeText TEXT")
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN addOnsJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN logSource TEXT")
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN referenceId TEXT")
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN remoteId TEXT")
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN syncStatus TEXT NOT NULL DEFAULT 'pending'")
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE scan_history_v2 ADD COLUMN nutritionNote TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             // Fast path: Return existing instance
             return INSTANCE ?: synchronized(this) {
@@ -44,7 +72,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "calories_database"
                 )
-                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     // Only versions older than 4 (development builds) have no migration path.
                     .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3)
                     .build()

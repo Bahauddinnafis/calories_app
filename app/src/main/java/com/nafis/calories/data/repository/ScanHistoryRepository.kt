@@ -9,6 +9,8 @@ import com.nafis.calories.data.local.entity.IngredientSnapshot
 import com.nafis.calories.data.local.entity.ScanHistoryEntity
 import com.nafis.calories.data.model.MealType
 import com.nafis.calories.data.model.ScanResult
+import com.nafis.calories.data.sync.CloudSyncManager
+import com.nafis.calories.data.sync.PendingDeletionStore
 import com.nafis.calories.utils.ImageStorageUtil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +21,8 @@ import kotlinx.coroutines.withContext
  * Handles mapping between ScanResult domain model and ScanHistoryEntity.
  * Preserves immutable snapshots of scan results.
  */
+data class ConsumedTotals(val energyKcal: Double, val proteinG: Double)
+
 class ScanHistoryRepository(private val context: Context) {
 
     private val scanHistoryDao by lazy {
@@ -47,12 +51,13 @@ class ScanHistoryRepository(private val context: Context) {
 
             Log.d(TAG, "[History]   Image saved: $imagePath")
 
-            val history = toEntity(scanResult, imagePath)
+            val history = toEntity(scanResult, imagePath, ScanHistoryEntity.SOURCE_SCAN, scanResult.scanId)
 
             // Insert to database
             try {
                 val id = scanHistoryDao.insert(history)
                 Log.d(TAG, "[History] ✓ Saved successfully (ID: $id)")
+                CloudSyncManager.requestSync()
                 Result.success(id)
             } catch (e: Exception) {
                 // Rollback: Delete saved image if DB insert fails
@@ -66,17 +71,53 @@ class ScanHistoryRepository(private val context: Context) {
         }
     }
 
+    /**
+     * Saves an entry logged without a photo (recommendation, packaged product, manual).
+     * No image file is written; [ScanHistoryEntity.imagePath] stays empty.
+     */
+    suspend fun saveEntryWithoutImage(
+        scanResult: ScanResult,
+        source: String,
+        referenceId: String?
+    ): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            val id = scanHistoryDao.insert(toEntity(scanResult, imagePath = "", source, referenceId))
+            Log.d(TAG, "[History] ✓ Saved $source entry '${scanResult.mealName}' (ID: $id)")
+            CloudSyncManager.requestSync()
+            Result.success(id)
+        } catch (e: Exception) {
+            Log.e(TAG, "[History] ✗ Saving $source entry failed", e)
+            Result.failure(e)
+        }
+    }
+
+    /** What was eaten today, used as context for scans. */
+    suspend fun getConsumedSince(startOfDay: Long): ConsumedTotals = withContext(Dispatchers.IO) {
+        val rows = scanHistoryDao.getHistoriesSince(startOfDay)
+        ConsumedTotals(
+            energyKcal = rows.sumOf { it.consumedEnergyKcal ?: 0.0 },
+            proteinG = rows.sumOf { it.consumedProteinG ?: 0.0 }
+        )
+    }
+
     suspend fun saveCorrection(scanResult: ScanResult, image: Bitmap?): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val existing = scanHistoryDao.getHistoryByScanId(scanResult.scanId)
             if (existing != null) {
-                val corrected = toEntity(scanResult, existing.imagePath).copy(
+                val corrected = toEntity(
+                    scanResult,
+                    existing.imagePath,
+                    existing.resolvedLogSource,
+                    existing.referenceId ?: existing.scanId
+                ).copy(
                     id = existing.id,
                     timestamp = existing.timestamp,
-                    mealType = scanResult.mealType?.key ?: existing.mealType
+                    mealType = scanResult.mealType?.key ?: existing.mealType,
+                    remoteId = existing.remoteId
                 )
                 scanHistoryDao.update(corrected)
                 Log.d(TAG, "[History] ✓ Correction saved (ID: ${existing.id})")
+                CloudSyncManager.requestSync()
                 Result.success(Unit)
             } else if (image != null) {
                 saveScanHistory(scanResult, image).map { }
@@ -89,7 +130,12 @@ class ScanHistoryRepository(private val context: Context) {
         }
     }
 
-    private fun toEntity(scanResult: ScanResult, imagePath: String): ScanHistoryEntity {
+    private fun toEntity(
+        scanResult: ScanResult,
+        imagePath: String,
+        source: String,
+        referenceId: String?
+    ): ScanHistoryEntity {
         val ingredientSnapshots = scanResult.ingredients.map { ingredient ->
             IngredientSnapshot(
                 foodCode = ingredient.foodCode,
@@ -141,16 +187,23 @@ class ScanHistoryRepository(private val context: Context) {
             timestamp = scanResult.timestamp,
             consumedWeightG = scanResult.consumedWeightG ?: scanResult.defaultConsumedWeightG,
             mealType = scanResult.mealType?.key,
-            isUserCorrected = scanResult.isUserCorrected
+            isUserCorrected = scanResult.isUserCorrected,
+            aiNoticeText = scanResult.aiDisclaimerText,
+            nutritionNote = scanResult.personalNutritionNote,
+            addOnsJson = gson.toJson(scanResult.suggestedAddOns),
+            logSource = source,
+            referenceId = referenceId,
+            syncStatus = ScanHistoryEntity.SYNC_PENDING,
+            updatedAt = System.currentTimeMillis()
         )
     }
 
     suspend fun updateConsumedWeight(scanId: String, weightG: Double): Boolean = withContext(Dispatchers.IO) {
-        scanHistoryDao.updateConsumedWeight(scanId, weightG) > 0
+        (scanHistoryDao.updateConsumedWeight(scanId, weightG) > 0).also { if (it) CloudSyncManager.requestSync() }
     }
 
     suspend fun updateMealType(scanId: String, mealType: MealType): Boolean = withContext(Dispatchers.IO) {
-        scanHistoryDao.updateMealType(scanId, mealType.key) > 0
+        (scanHistoryDao.updateMealType(scanId, mealType.key) > 0).also { if (it) CloudSyncManager.requestSync() }
     }
 
     /**
@@ -176,7 +229,11 @@ class ScanHistoryRepository(private val context: Context) {
             scanHistoryDao.delete(history)
 
             // Step 2: Delete associated image (best effort)
-            ImageStorageUtil.deleteImage(context, history.imagePath)
+            if (history.hasImage) ImageStorageUtil.deleteImage(context, history.imagePath)
+
+            // Step 3: Remove the uploaded copy on the next sync
+            history.remoteId?.let { PendingDeletionStore.add(context, listOf(it)) }
+            CloudSyncManager.requestSync()
 
             Result.success(Unit)
         } catch (e: Exception) {
@@ -189,8 +246,11 @@ class ScanHistoryRepository(private val context: Context) {
      */
     suspend fun deleteAllHistories(): Result<Int> = withContext(Dispatchers.IO) {
         try {
+            PendingDeletionStore.add(context, scanHistoryDao.getAllRemoteIds())
+
             // Step 1: Delete all from database
             val deletedCount = scanHistoryDao.deleteAll()
+            CloudSyncManager.requestSync()
 
             // Step 2: Delete all images (best effort)
             ImageStorageUtil.deleteAllImages(context)

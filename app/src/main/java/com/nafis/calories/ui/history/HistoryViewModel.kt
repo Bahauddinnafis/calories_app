@@ -26,11 +26,10 @@ class HistoryViewModel(context: Context) : ViewModel() {
     private val imageCache = mutableMapOf<Long, Bitmap>()
 
     suspend fun getHistoryImage(history: ScanHistoryEntity): Bitmap? {
-        // Fast path: Check cache
         imageCache[history.id]?.let { return it }
 
-        // Cache miss: Load from storage
         val bitmap = repository.loadHistoryImage(history.imagePath)
+            ?.takeIf { it.width > 1 && it.height > 1 }
 
         // Cache for future use
         bitmap?.let {
@@ -51,7 +50,7 @@ class HistoryViewModel(context: Context) : ViewModel() {
                 imageCache.remove(history.id)
                 DeleteState.Success
             } else {
-                DeleteState.Error(result.exceptionOrNull()?.message ?: "Unknown error")
+                DeleteState.Error("Catatan belum berhasil dihapus. Silakan coba lagi.")
             }
 
             // Reset state setelah 2 detik (give user time to see message)
@@ -72,7 +71,7 @@ class HistoryViewModel(context: Context) : ViewModel() {
                 val count = result.getOrNull() ?: 0
                 DeleteState.Success
             } else {
-                DeleteState.Error(result.exceptionOrNull()?.message ?: "Unknown error")
+                DeleteState.Error("Riwayat belum berhasil dihapus. Silakan coba lagi.")
             }
 
             // Reset state

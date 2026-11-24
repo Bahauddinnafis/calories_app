@@ -5,13 +5,19 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nafis.calories.data.model.MealType
+import com.nafis.calories.data.model.Nutrition
 import com.nafis.calories.data.model.ScanCorrection
 import com.nafis.calories.data.model.ScanCorrectionRules
 import com.nafis.calories.data.model.ScanError
 import com.nafis.calories.data.model.ScanResult
 import com.nafis.calories.data.model.ScanStatus
+import com.nafis.calories.data.repository.MealRecommendation
+import com.nafis.calories.data.repository.PackagedProduct
 import com.nafis.calories.data.repository.ScanHistoryRepository
+import com.nafis.calories.data.repository.UserProfileRepository
 import com.nafis.calories.data.service.FoodAnalysisService
+import com.nafis.calories.data.service.ScanDailyContext
+import com.nafis.calories.utils.DailyTotals
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,12 +25,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.util.Log
+import com.nafis.calories.data.local.entity.ScanHistoryEntity
 import java.util.Calendar
 
 class ScanViewModel(context: Context) : ViewModel() {
 
     // Repository dependencies
     private val scanHistoryRepository = ScanHistoryRepository(context)
+    private val profileRepository = UserProfileRepository.getInstance(context)
 
     // Provider-neutral food analysis service (backend handles AI provider)
     private val foodAnalysisService = FoodAnalysisService()
@@ -36,6 +44,7 @@ class ScanViewModel(context: Context) : ViewModel() {
 
     private val pendingSaves = mutableMapOf<String, Job>()
     private var portionUpdateJob: Job? = null
+    private var estimateJob: Job? = null
 
     fun navigateToCamera() {
         _uiState.value = ScanUiState.Camera
@@ -100,6 +109,7 @@ class ScanViewModel(context: Context) : ViewModel() {
             return
         }
 
+        estimateJob?.cancel()
         val submitting = editing.copy(isSubmitting = true, errorMessage = null)
         _uiState.value = submitting
         // The user may leave (back / bottom bar) while waiting; never pull them back to this flow.
@@ -178,7 +188,7 @@ class ScanViewModel(context: Context) : ViewModel() {
         try {
             // Step 1: Call backend API for food analysis
             Log.d(TAG, "Sending image to backend for analysis...")
-            val result = foodAnalysisService.scanFood(bitmap)
+            val result = foodAnalysisService.scanFood(bitmap, buildDailyContext())
 
             if (result.isFailure) {
                 val error = result.exceptionOrNull()
@@ -286,9 +296,161 @@ class ScanViewModel(context: Context) : ViewModel() {
         _uiState.value = ScanUiState.Home
     }
 
+    fun logCustomMeal(
+        mealName: String,
+        kcal: Double,
+        protein: Double,
+        carbs: Double,
+        fat: Double,
+        servingWeightG: Double,
+        onLogged: (() -> Unit)? = null
+    ) {
+        viewModelScope.launch {
+            val saved = saveManualMeal(
+                prefix = "manual",
+                source = ScanHistoryEntity.SOURCE_MANUAL,
+                referenceId = null,
+                mealName = mealName,
+                kcal = kcal,
+                protein = protein,
+                carbs = carbs,
+                fat = fat,
+                servingWeightG = servingWeightG
+            )
+            if (saved) onLogged?.invoke()
+        }
+    }
+
+    /** 1-tap log of one serving of a Home recommendation; the Room-backed history refreshes Home. */
+    fun logRecommendedMeal(meal: MealRecommendation, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            onResult(
+                saveManualMeal(
+                    prefix = "rec_${meal.id}",
+                    source = ScanHistoryEntity.SOURCE_RECOMMENDATION,
+                    referenceId = meal.id,
+                    mealName = meal.title,
+                    kcal = meal.energyKcal,
+                    protein = meal.proteinG,
+                    carbs = meal.carbohydrateG,
+                    fat = meal.fatG,
+                    servingWeightG = meal.servingWeightG
+                )
+            )
+        }
+    }
+
+    /** Logs one serving of a packaged product found via search or barcode. */
+    fun logPackagedProduct(product: PackagedProduct, onResult: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val name = product.brand?.takeIf { !product.name.contains(it, ignoreCase = true) }
+                ?.let { "${product.name} ($it)" } ?: product.name
+            onResult(
+                saveManualMeal(
+                    prefix = "product",
+                    source = ScanHistoryEntity.SOURCE_PRODUCT,
+                    referenceId = product.id,
+                    mealName = name,
+                    kcal = product.energyKcal,
+                    protein = product.proteinG,
+                    carbs = product.carbohydrateG,
+                    fat = product.fatG,
+                    servingWeightG = product.servingWeightG
+                )
+            )
+        }
+    }
+
+    private suspend fun saveManualMeal(
+        prefix: String,
+        source: String,
+        referenceId: String?,
+        mealName: String,
+        kcal: Double,
+        protein: Double,
+        carbs: Double,
+        fat: Double,
+        servingWeightG: Double
+    ): Boolean {
+        // Without a known weight the entry is "1 serving"; a unit of 1 keeps the consumed ratio at 100%.
+        val servingWeight = servingWeightG.takeIf { it > 0.0 } ?: 1.0
+        val nutrition = Nutrition(
+            energyKcal = kcal,
+            proteinG = protein,
+            fatG = fat,
+            carbohydrateG = carbs,
+            sugarG = null,
+            saturatedFatG = null,
+            cholesterolMg = null,
+            fiberG = null,
+            sodiumMg = null,
+            calciumMg = null,
+            ironMg = null
+        )
+        val scanResult = ScanResult(
+            scanId = "${prefix}_${System.currentTimeMillis()}",
+            mealName = mealName,
+            servingWeightG = servingWeight,
+            servingConfidence = 1.0,
+            ingredients = emptyList(),
+            totalNutrition = nutrition,
+            isComplete = true,
+            missingNutrients = emptyList(),
+            overallConfidence = 1.0,
+            uncertaintyNotes = emptyList(),
+            // Whole serving eaten, so consumed nutrition equals the totals.
+            consumedWeightG = servingWeight,
+            mealType = MealType.fromHour(Calendar.getInstance().get(Calendar.HOUR_OF_DAY))
+        )
+        // Logged without a photo: no image file is stored.
+        val result = scanHistoryRepository.saveEntryWithoutImage(scanResult, source, referenceId)
+        result.onFailure { Log.e(TAG, "Failed to log $source meal '$mealName'", it) }
+        return result.isSuccess
+    }
+
+    /** Remaining kcal/protein for today and the user's goal, sent along with a scan. */
+    private suspend fun buildDailyContext(): ScanDailyContext? {
+        val profile = profileRepository.profile.value ?: return null
+        val targets = profileRepository.dailyTargets.value
+        val consumed = scanHistoryRepository.getConsumedSince(DailyTotals.startOfDay(System.currentTimeMillis()))
+        return ScanDailyContext(
+            remainingKcal = (targets.energyKcal - consumed.energyKcal).coerceAtLeast(0.0),
+            remainingProteinG = (targets.proteinG - consumed.proteinG).coerceAtLeast(0.0),
+            goal = profile.goal.key
+        )
+    }
+
+    /**
+     * Asks the backend for the nutrition of the correction being edited (debounced), so the
+     * "Estimasi Setelah Koreksi" total comes from the backend rather than a local formula.
+     */
+    fun previewCorrection(correction: ScanCorrection) {
+        val editing = _uiState.value as? ScanUiState.Editing ?: return
+        // submitCorrection compares states by equality; never touch the state while it waits.
+        if (editing.isSubmitting) return
+        estimateJob?.cancel()
+        if (ScanCorrectionRules.validate(correction) != null) {
+            _uiState.value = editing.copy(estimateKcal = null, isEstimating = false, estimateUnavailable = false)
+            return
+        }
+        _uiState.value = editing.copy(isEstimating = true, estimateUnavailable = false)
+        estimateJob = viewModelScope.launch {
+            delay(ESTIMATE_DEBOUNCE_MS)
+            val result = foodAnalysisService.estimate(correction)
+            val current = _uiState.value as? ScanUiState.Editing ?: return@launch
+            if (current.isSubmitting || current.original.scanId != editing.original.scanId) return@launch
+            _uiState.value = current.copy(
+                estimateKcal = result.getOrNull()?.totalNutrition?.energyKcal,
+                isEstimating = false,
+                estimateUnavailable = result.isFailure
+            )
+        }
+    }
+
     companion object {
         private const val TAG = "ScanViewModel"
         private const val PORTION_SAVE_DEBOUNCE_MS = 400L
+        private const val ESTIMATE_DEBOUNCE_MS = 500L
     }
 }
 
@@ -327,6 +489,10 @@ sealed class ScanUiState {
         val capturedImage: Bitmap?,
         val returnTo: ScanUiState,
         val isSubmitting: Boolean = false,
-        val errorMessage: String? = null
+        val errorMessage: String? = null,
+        /** Backend estimate for the correction being edited; null until one arrives. */
+        val estimateKcal: Double? = null,
+        val isEstimating: Boolean = false,
+        val estimateUnavailable: Boolean = false
     ) : ScanUiState()
 }

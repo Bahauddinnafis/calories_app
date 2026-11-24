@@ -8,9 +8,11 @@ import com.nafis.calories.data.model.Ingredient
 import com.nafis.calories.data.model.MealType
 import com.nafis.calories.data.model.Nutrition
 import com.nafis.calories.data.model.NutritionSource
+import com.nafis.calories.data.model.ScanNotes
 import com.nafis.calories.data.model.ScanResult
 import com.nafis.calories.data.model.ScanStatus
 import com.nafis.calories.data.model.ServingNormalizer
+import com.nafis.calories.data.model.SuggestedAddOn
 import java.util.Calendar
 
 /**
@@ -30,6 +32,7 @@ object HistoryMapper {
             unitCount = entity.servingUnitCount
         )
         val ingredients = parseIngredients(entity.ingredientsJson)
+        val uncertaintyNotes = parseStringList(entity.uncertaintyNotesJson)
         val totals = Nutrition(
             energyKcal = entity.totalEnergyKcal,
             proteinG = entity.totalProteinG,
@@ -58,11 +61,19 @@ object HistoryMapper {
             isComplete = entity.isComplete,
             missingNutrients = parseStringList(entity.missingNutrientsJson),
             overallConfidence = entity.overallConfidence,
-            uncertaintyNotes = parseStringList(entity.uncertaintyNotesJson),
+            uncertaintyNotes = uncertaintyNotes,
             timestamp = entity.timestamp,
             consumedWeightG = entity.consumedWeightG,
             mealType = mealTypeOf(entity),
-            isUserCorrected = entity.isUserCorrected
+            isUserCorrected = entity.isUserCorrected,
+            personalNutritionNote = ScanNotes.personalNote(entity.nutritionNote, uncertaintyNotes),
+            // Only photo scans are AI estimates; recommendations/products/manual entries are not.
+            aiDisclaimerText = if (entity.resolvedLogSource == ScanHistoryEntity.SOURCE_SCAN) {
+                ScanNotes.aiDisclaimer(entity.aiNoticeText)
+            } else {
+                null
+            },
+            suggestedAddOns = parseAddOns(entity.addOnsJson)
         )
     }
 
@@ -116,6 +127,17 @@ object HistoryMapper {
         } catch (e: Exception) {
             // Graceful fallback for corrupted or old format JSON
             android.util.Log.w("HistoryMapper", "Failed to parse ingredients JSON: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun parseAddOns(json: String): List<SuggestedAddOn> {
+        return try {
+            if (json.isBlank() || json == "[]") return emptyList()
+            val type = object : TypeToken<List<SuggestedAddOn>>() {}.type
+            gson.fromJson<List<SuggestedAddOn>>(json, type).orEmpty()
+        } catch (e: Exception) {
+            android.util.Log.w("HistoryMapper", "Failed to parse add-ons JSON: ${e.message}")
             emptyList()
         }
     }

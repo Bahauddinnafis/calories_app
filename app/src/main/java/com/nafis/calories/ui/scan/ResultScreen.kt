@@ -1,9 +1,9 @@
 package com.nafis.calories.ui.scan
 
 import android.graphics.Bitmap
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,25 +15,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Verified
-import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,30 +38,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.nafis.calories.data.model.ConfidenceLevel
+import androidx.compose.ui.unit.sp
 import com.nafis.calories.data.model.DailyTargetCalculator
-import com.nafis.calories.data.model.Ingredient
 import com.nafis.calories.data.model.MealType
 import com.nafis.calories.data.model.Nutrition
 import com.nafis.calories.data.model.ScanResult
-import com.nafis.calories.ui.components.CalorieDisplay
-import com.nafis.calories.ui.components.KeyNutrientsSection
-import com.nafis.calories.ui.components.MacroNutrientsRow
-import com.nafis.calories.ui.components.MicroNutrientCard
 import com.nafis.calories.ui.components.PrimaryButton
 import com.nafis.calories.ui.components.SecondaryButton
+import com.nafis.calories.ui.theme.FatColor
+import com.nafis.calories.ui.theme.Primary
+import com.nafis.calories.ui.theme.ProteinBgColor
 import com.nafis.calories.ui.theme.Spacing
-import com.nafis.calories.utils.NutritionFormatter
-import java.text.SimpleDateFormat
-import java.util.Date
+import com.nafis.calories.utils.formatKcalInt
 import java.util.Locale
 import kotlin.math.roundToInt
+
+/** scanId prefixes used by ScanViewModel for entries logged without a photo. */
+private val MANUAL_ENTRY_PREFIXES = listOf("manual_", "rec_", "product_")
 
 @Composable
 fun ResultScreen(
@@ -74,7 +68,7 @@ fun ResultScreen(
     capturedImage: Bitmap?,
     onScanAgain: () -> Unit,
     warning: String? = null,
-    primaryActionText: String = "Scan Makanan Lain",
+    primaryActionText: String = "Simpan ke Catatan",
     dailyEnergyKcal: Double = DailyTargetCalculator.DEFAULT_ENERGY_KCAL,
     loggedAt: Long? = null,
     onPortionChanged: ((Double) -> Unit)? = null,
@@ -82,831 +76,564 @@ fun ResultScreen(
     onCorrect: (() -> Unit)? = null
 ) {
     val scrollState = rememberScrollState()
+
     var currentServingWeightG by remember(scanResult.scanId) {
-        mutableDoubleStateOf((scanResult.consumedWeightG ?: scanResult.defaultConsumedWeightG).coerceAtLeast(1.0))
+        mutableDoubleStateOf(scanResult.effectiveConsumedWeightG.coerceAtLeast(1.0))
     }
+
     val updatePortion: (Double) -> Unit = { newWeight ->
         currentServingWeightG = newWeight
         onPortionChanged?.invoke(newWeight)
     }
 
+    val baseFullWeight = scanResult.servingWeightG.takeIf { it > 0.0 } ?: scanResult.defaultConsumedWeightG
+    val ratio = (currentServingWeightG / baseFullWeight).coerceIn(0.05, 5.0)
+
+    val totalPhotoKcal = scanResult.totalNutrition.energyKcal.formatKcalInt()
+    val onePieceKcal = ((scanResult.totalNutrition.energyKcal ?: 0.0) * (scanResult.defaultConsumedWeightG / baseFullWeight)).formatKcalInt()
+    val selectedConsumedKcal = ((scanResult.totalNutrition.energyKcal ?: 0.0) * ratio).formatKcalInt()
+    val carbG = ((scanResult.totalNutrition.carbohydrateG ?: 0.0) * ratio).roundToInt()
+    val protG = ((scanResult.totalNutrition.proteinG ?: 0.0) * ratio).roundToInt()
+    val fatG = ((scanResult.totalNutrition.fatG ?: 0.0) * ratio).roundToInt()
+
     val displayResult = remember(scanResult, currentServingWeightG) {
         scaleScanResult(scanResult, currentServingWeightG)
     }
 
-    val displayWeightText = formatGrams(currentServingWeightG)
+    val unitName = scanResult.servingUnitName?.replaceFirstChar {
+        if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+    } ?: "Porsi"
 
-    val unitName = scanResult.servingUnitName ?: "porsi"
-    val unitCount = scanResult.servingUnitCount ?: 1
-    val singleWeight = scanResult.singleServingWeightG ?: scanResult.servingWeightG
-
-    val subTitleText = if (scanResult.isMultiUnit) {
-        val currentUnits = currentServingWeightG / singleWeight
-        val unitText = if (kotlin.math.abs(currentUnits - currentUnits.roundToInt()) < 0.1) {
-            "${currentUnits.roundToInt()} $unitName"
-        } else {
-            String.format(java.util.Locale("id", "ID"), "%.1f %s", currentUnits, unitName)
-        }
-        "• $unitText · di foto ada $unitCount $unitName"
-    } else {
-        "• perkiraan dari foto"
+    fun formatMacro(value: Double?): String {
+        return if (value == null) "-" else "${value.roundToInt()}g"
     }
+
+    val carbText = formatMacro(displayResult.totalNutrition.carbohydrateG)
+    val protText = formatMacro(displayResult.totalNutrition.proteinG)
+    val fatText = formatMacro(displayResult.totalNutrition.fatG)
+
+    val confidencePercent = scanResult.overallConfidence
+        .takeIf { !it.isNaN() && it > 0.0 }
+        ?.let { (it.coerceAtMost(1.0) * 100).roundToInt() }
+
+    val displayImage = capturedImage?.takeIf { it.width > 1 && it.height > 1 }
+    val isManualEntry = MANUAL_ENTRY_PREFIXES.any { scanResult.scanId.startsWith(it) }
+    val personalNote = scanResult.personalNutritionNote?.trim()?.takeIf { it.isNotEmpty() }
+    val aiDisclaimer = scanResult.aiDisclaimerText?.trim()?.takeIf { it.isNotEmpty() && !isManualEntry }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
             .verticalScroll(scrollState)
+            .padding(horizontal = Spacing.screenHorizontal)
     ) {
-        capturedImage?.let { bitmap ->
-            Box(
+        Spacer(modifier = Modifier.height(Spacing.screenTop))
+
+        // Top Navigation Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(44.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = onScanAgain,
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(MaterialTheme.colorScheme.surface, CircleShape)
+                    .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Kembali",
+                    tint = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Text(
+                    text = if (isManualEntry) "Detail Catatan" else "Hasil Analisis Cloud AI",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(38.dp))
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Captured Food Image Preview
+        displayImage?.let { bitmap ->
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(240.dp)
+                    .height(200.dp),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
                 Image(
                     bitmap = bitmap.asImageBitmap(),
-                    contentDescription = displayResult.mealName,
+                    contentDescription = scanResult.mealName,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
             }
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Spacing.screenHorizontal)
+        // Dark AI Result Card (#0F172A) with Dual-Calorie Display & Comparison Box
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F172A))
         ) {
-            Spacer(modifier = Modifier.height(Spacing.sectionSmall))
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = displayResult.mealName,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = displayWeightText,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = subTitleText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (loggedAt != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Dicatat ${formatLoggedAt(loggedAt)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (scanResult.isUserCorrected) {
-                // Backend reports confidence 1.0 here; it reflects the user's input, not the photo.
-                Spacer(modifier = Modifier.height(Spacing.componentMedium))
-                UserCorrectedBanner()
-            } else {
-                scanResult.confidenceLevel?.let { level ->
-                    Spacer(modifier = Modifier.height(Spacing.componentMedium))
-                    ConfidenceBanner(
-                        level = level,
-                        servingUncertain = scanResult.isServingUncertain,
-                        onCorrect = onCorrect
-                    )
-                }
-            }
-
-            if (!warning.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(Spacing.componentMedium))
-                PartialResultBanner(warning)
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.componentMedium))
-
-            CalorieDisplay(
-                calories = displayResult.totalNutrition.energyKcal,
-                dailyEnergyKcal = dailyEnergyKcal
-            )
-
-            Spacer(modifier = Modifier.height(Spacing.componentMedium))
-
-            MacroNutrientsRow(
-                protein = displayResult.totalNutrition.proteinG,
-                carbs = displayResult.totalNutrition.carbohydrateG,
-                fat = displayResult.totalNutrition.fatG
-            )
-
-            val missingLabels = NutritionFormatter.missingNutrientLabels(displayResult.totalNutrition)
-            if (missingLabels.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(Spacing.componentSmall))
-                Text(
-                    text = "Belum terhitung: ${missingLabels.joinToString(", ")}. " +
-                        "Bagian ini tidak dihitung, bukan berarti nilainya nol.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(Spacing.componentMedium))
-
-            KeyNutrientsSection(
-                nutrition = displayResult.totalNutrition
-            )
-
-            Spacer(modifier = Modifier.height(Spacing.componentMedium))
-
-            PortionAdjusterCard(
-                originalTotalWeightG = scanResult.servingWeightG,
-                singleServingWeightG = scanResult.singleServingWeightG,
-                servingUnitName = scanResult.servingUnitName,
-                servingUnitCount = scanResult.servingUnitCount,
-                currentWeightG = currentServingWeightG,
-                highlight = scanResult.isServingUncertain,
-                savesToHistory = onPortionChanged != null,
-                onWeightChanged = updatePortion
-            )
-
-            if (onMealTypeChanged != null) {
-                Spacer(modifier = Modifier.height(Spacing.componentMedium))
-                MealTypeSelector(
-                    selected = scanResult.mealType,
-                    onSelected = onMealTypeChanged
-                )
-            }
-
-            if (displayResult.displayAiNotice && !displayResult.aiNoticeText.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(Spacing.componentMedium))
-                Card(
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.small,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Column(modifier = Modifier.padding(Spacing.componentMedium)) {
-                        Text(
-                            text = "Tentang perkiraan ini",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = displayResult.aiNoticeText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            if (displayResult.uncertaintyNotes.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(Spacing.componentMedium))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.small,
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Column(modifier = Modifier.padding(Spacing.componentMedium)) {
-                        Text(
-                            text = "Catatan",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        displayResult.uncertaintyNotes.forEach { note ->
-                            Text(
-                                text = "• $note",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    Column(modifier = Modifier.weight(1f)) {
+                        val headerLabel = when {
+                            isManualEntry -> "Dicatat tanpa foto"
+                            confidencePercent != null -> "Akurasi Deteksi $confidencePercent%"
+                            else -> null
                         }
+                        if (headerLabel != null) {
+                            Text(
+                                text = headerLabel,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF5EEAD4)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                        }
+                        Text(
+                            text = scanResult.mealName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = selectedConsumedKcal.toString(),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color(0xFF5EEAD4)
+                        )
+                        Text(
+                            text = "Yang Anda Makan",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF94A3B8)
+                        )
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(Spacing.sectionMedium))
-
-            val micronutrients = listOfNotNull(
-                displayResult.totalNutrition.fiberG?.let { MicroNutrient("Serat", it, "g", 30.0) },
-                displayResult.totalNutrition.calciumMg?.let { MicroNutrient("Kalsium", it, "mg", 1100.0) },
-                displayResult.totalNutrition.ironMg?.let { MicroNutrient("Zat besi", it, "mg", 18.0) }
-            )
-
-            if (micronutrients.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Serat & Mineral",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Persentase dari kebutuhan harian orang dewasa",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = "Estimasi 1 $unitName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF5EEAD4),
+                    fontWeight = FontWeight.Medium
                 )
 
-                Spacer(modifier = Modifier.height(Spacing.componentSmall))
+                Spacer(modifier = Modifier.height(16.dp))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF1E293B)))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Column(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.componentSmall)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    micronutrients.chunked(2).forEach { rowItems ->
+                    Column {
+                        Text("Karbohidrat", style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8))
+                        Text(carbText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                    Column {
+                        Text("Protein", style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8))
+                        Text(protText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF5EEAD4))
+                    }
+                    Column {
+                        Text("Lemak", style = MaterialTheme.typography.labelSmall, color = Color(0xFF94A3B8))
+                        Text(fatText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Dual-Calorie Comparison Info Box (Always Visible)
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFF1E293B)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(Spacing.componentSmall)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            rowItems.forEach { item ->
-                                MicroNutrientCard(
-                                    label = item.label,
-                                    value = item.value,
-                                    unit = item.unit,
-                                    dailyTarget = item.dailyTarget,
-                                    modifier = Modifier.weight(1f)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Per 1 $unitName",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF94A3B8)
+                                )
+                                Text(
+                                    text = "~$onePieceKcal kkal",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF5EEAD4)
                                 )
                             }
-                            // Keep a lone card at half width so the grid stays aligned.
-                            if (rowItems.size == 1) {
-                                Spacer(modifier = Modifier.weight(1f))
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.End
+                            ) {
+                                Text(
+                                    text = "Total Seluruh Foto",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF94A3B8)
+                                )
+                                Text(
+                                    text = "$totalPhotoKcal kkal",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
                             }
                         }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF334155)))
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "AI mendeteksi total $totalPhotoKcal kkal untuk seluruh makanan di foto ini. Pilih jumlah yang Anda makan di bawah agar catatan harian tetap akurat.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFF94A3B8),
+                            lineHeight = 16.sp
+                        )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(Spacing.sectionMedium))
-            }
-
-            if (displayResult.ingredients.isNotEmpty()) {
-                Text(
-                    text = "Rincian Bahan",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(Spacing.componentSmall))
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.componentSmall)
-                ) {
-                    displayResult.ingredients.forEach { ingredient ->
-                        IngredientItem(ingredient)
-                        if (ingredient != displayResult.ingredients.last()) {
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = Spacing.componentSmall),
-                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(Spacing.sectionMedium))
-            }
-
-            Text(
-                text = "Nilai gizi di atas adalah perkiraan dari foto dan data referensi gizi. Gunakan sebagai panduan, bukan pengganti saran ahli gizi.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = Spacing.componentSmall)
-            )
-
-            Spacer(modifier = Modifier.height(Spacing.componentMedium))
-
-            if (onCorrect != null) {
-                SecondaryButton(
-                    text = "Koreksi Makanan",
-                    onClick = onCorrect,
-                    icon = Icons.Outlined.Edit
-                )
-                Spacer(modifier = Modifier.height(Spacing.componentSmall))
-            }
-
-            PrimaryButton(
-                text = primaryActionText,
-                onClick = onScanAgain
-            )
-
-            Spacer(modifier = Modifier.height(Spacing.screenBottom))
-        }
-    }
-}
-
-@Composable
-private fun PartialResultBanner(message: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(Spacing.componentMedium),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.WarningAmber,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(Spacing.componentSmall))
-            Column {
-                Text(
-                    text = "Data gizi belum lengkap",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
-    }
-}
 
-@Composable
-private fun UserCorrectedBanner() {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.componentMedium, vertical = Spacing.componentSmall),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Edit,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(Spacing.componentSmall))
-            Column {
-                Text(
-                    text = "Dikoreksi oleh Anda",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Gizi dihitung ulang dari nama dan berat bahan yang Anda isi.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
+        Spacer(modifier = Modifier.height(16.dp))
 
-@Composable
-private fun ConfidenceBanner(
-    level: ConfidenceLevel,
-    servingUncertain: Boolean,
-    onCorrect: (() -> Unit)?
-) {
-    val (title, body) = when (level) {
-        ConfidenceLevel.HIGH -> "Perkiraan cukup akurat" to
-            "Makanan dan porsinya terlihat jelas di foto."
-        ConfidenceLevel.MEDIUM -> "Perkiraan cukup baik" to
-            "Sebaiknya cek kembali nama makanan dan porsinya."
-        ConfidenceLevel.LOW -> "Perkiraan kasar" to
-            "Foto kurang jelas atau makanannya sulit dikenali. Periksa porsinya, atau scan ulang dengan foto yang lebih jelas."
-    }
-    val text = if (servingUncertain && level == ConfidenceLevel.HIGH) {
-        "Makanannya terlihat jelas, tetapi berat porsinya sulit diperkirakan."
-    } else {
-        body
-    }
-    val (container, accent) = when (level) {
-        ConfidenceLevel.HIGH -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) to MaterialTheme.colorScheme.primary
-        ConfidenceLevel.MEDIUM -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) to MaterialTheme.colorScheme.onSurfaceVariant
-        ConfidenceLevel.LOW -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f) to MaterialTheme.colorScheme.tertiary
-    }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        color = container
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = Spacing.componentMedium, vertical = Spacing.componentSmall),
-            verticalAlignment = Alignment.Top
-        ) {
-            Icon(
-                imageVector = if (level == ConfidenceLevel.HIGH) Icons.Outlined.Verified else Icons.Outlined.Info,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(Spacing.componentSmall))
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (onCorrect != null && level != ConfidenceLevel.HIGH) {
-                    Text(
-                        text = "Koreksi makanan →",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(top = Spacing.componentExtraTiny)
-                            .clickable(onClick = onCorrect)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MealTypeSelector(selected: MealType?, onSelected: (MealType) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+        // Visual Unit Portion Selector (Mutually Exclusive)
         Text(
-            text = "Waktu makan",
+            text = "Berapa banyak yang Anda makan?",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(modifier = Modifier.height(Spacing.componentSmall))
+        Spacer(modifier = Modifier.height(8.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            MealType.entries.forEach { type ->
-                val isSelected = type == selected
-                Surface(
-                    onClick = { onSelected(type) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
-                ) {
-                    Text(
-                        text = type.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp)
-                    )
-                }
-            }
-        }
-    }
-}
+            val isPortion1 = kotlin.math.abs(currentServingWeightG - scanResult.defaultConsumedWeightG) < 5.0
+            val isPortion2 = kotlin.math.abs(currentServingWeightG - (scanResult.defaultConsumedWeightG * 2)) < 5.0
+            val isHalfPlate = kotlin.math.abs(currentServingWeightG - (baseFullWeight * 0.5)) < 5.0
+            val isFullPhoto = !isPortion1 && !isPortion2 && !isHalfPlate
 
-private fun formatLoggedAt(timestamp: Long): String =
-    SimpleDateFormat("EEEE, d MMM yyyy '·' HH.mm", Locale("id", "ID")).format(Date(timestamp))
-
-@Composable
-private fun PortionAdjusterCard(
-    originalTotalWeightG: Double,
-    singleServingWeightG: Double?,
-    servingUnitName: String?,
-    servingUnitCount: Int?,
-    currentWeightG: Double,
-    highlight: Boolean,
-    savesToHistory: Boolean,
-    onWeightChanged: (Double) -> Unit
-) {
-    val isMultiUnit = (servingUnitCount != null && servingUnitCount > 1 && singleServingWeightG != null && singleServingWeightG > 0)
-    val base = singleServingWeightG?.takeIf { isMultiUnit } ?: if (originalTotalWeightG > 0) originalTotalWeightG else 100.0
-    val unitName = servingUnitName ?: "porsi"
-
-    val minWeight = (base * 0.1).coerceAtLeast(1.0).toFloat()
-    val maxWeight = maxOf(originalTotalWeightG * 2.0, base * 4.0).toFloat()
-
-    val stepG = when {
-        base <= 10.0 -> 1.0
-        base <= 50.0 -> 5.0
-        else -> 25.0
-    }
-
-    val currentWeightText = formatGrams(currentWeightG)
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        // Draw attention here when the portion weight is the weakest part of the estimate.
-        border = if (highlight) BorderStroke(1.5.dp, MaterialTheme.colorScheme.tertiary) else null
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Sesuaikan Porsi",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = when {
-                            highlight -> "Berat porsi sulit diperkirakan dari foto. Pastikan sesuai yang dimakan."
-                            savesToHistory -> "Ubah jika porsi yang dimakan berbeda. Tersimpan otomatis."
-                            else -> "Ubah jika porsi yang dimakan berbeda"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (highlight) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        onClick = { onWeightChanged((currentWeightG - stepG).coerceAtLeast(minWeight.toDouble())) },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Remove,
-                                contentDescription = "Kurangi Porsi",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    Text(
-                        text = currentWeightText,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(horizontal = 10.dp)
-                    )
-
-                    Surface(
-                        onClick = { onWeightChanged((currentWeightG + stepG).coerceAtMost(maxWeight.toDouble())) },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Tambah Porsi",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Slider(
-                value = currentWeightG.toFloat().coerceIn(minWeight, maxWeight),
-                onValueChange = { onWeightChanged(it.toDouble()) },
-                valueRange = minWeight..maxWeight,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.fillMaxWidth()
+            PortionChip(
+                label = "1 $unitName\n(~$onePieceKcal kkal)",
+                isSelected = isPortion1,
+                onClick = { updatePortion(scanResult.defaultConsumedWeightG) },
+                modifier = Modifier.weight(1f)
             )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                val presets: List<Pair<String, Double>> = if (isMultiUnit) {
-                    listOf(1, 2, servingUnitCount, servingUnitCount + 1)
-                        .distinct()
-                        .map { units -> "$units $unitName" to base * units }
-                } else {
-                    listOf(
-                        "½ porsi" to 0.5,
-                        "1 porsi" to 1.0,
-                        "1½ porsi" to 1.5,
-                        "2 porsi" to 2.0
-                    ).map { (label, multiplier) -> label to base * multiplier }
-                }
-
-                presets.forEach { (label, presetWeight) ->
-                    PortionPresetChip(
-                        label = label,
-                        weightText = formatGrams(presetWeight),
-                        selected = kotlin.math.abs(currentWeightG - presetWeight) < (stepG * 0.5),
-                        onClick = { onWeightChanged(presetWeight) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            PortionChip(
+                label = "2 $unitName\n(~${onePieceKcal * 2} kkal)",
+                isSelected = isPortion2,
+                onClick = { updatePortion(scanResult.defaultConsumedWeightG * 2) },
+                modifier = Modifier.weight(1f)
+            )
+            PortionChip(
+                label = "½ Foto\n(~${totalPhotoKcal / 2} kkal)",
+                isSelected = isHalfPlate,
+                onClick = { updatePortion(baseFullWeight * 0.5) },
+                modifier = Modifier.weight(1f)
+            )
+            PortionChip(
+                label = "Semua Foto\n($totalPhotoKcal kkal)",
+                isSelected = isFullPhoto,
+                onClick = { updatePortion(baseFullWeight) },
+                modifier = Modifier.weight(1f)
+            )
         }
-    }
-}
 
-@Composable
-private fun IngredientItem(ingredient: Ingredient) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(Spacing.componentExtraTiny)
-    ) {
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Ingredients Table Card with Nutrition Source Badges & Citation Note
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = ingredient.foodName,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
+                text = "Komponen Bahan Terdeteksi",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = formatGrams(ingredient.estimatedWeightG),
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "Rincian Bahan (Total Foto)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
-        Row(
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Card(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
-            ingredient.nutrition?.let { nutrition ->
-                Text(
-                    text = buildString {
-                        nutrition.energyKcal?.let {
-                            append("${NutritionFormatter.formatEnergy(it)} kkal")
-                        }
-                        nutrition.proteinG?.let {
-                            if (isNotEmpty()) append(" • ")
-                            append("${NutritionFormatter.formatMacro(it)} g protein")
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            val sourceObj = ingredient.source
-            val (sourceText, isUnavailable) = when {
-                // Without nutrition there is no source to credit, AI or otherwise.
-                !ingredient.hasNutrition -> "Data gizi belum tersedia" to true
-                ingredient.nutritionSourceType == "ai_estimation" ||
-                    ingredient.matchStatus == "estimated" ||
-                    sourceObj?.sourceName == "AI nutrition estimate" ||
-                    sourceObj == null -> "Perkiraan AI" to false
-                else -> "Data ${sourceObj.sourceName} ${sourceObj.sourceVersion}".trim() to false
-            }
-
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = if (isUnavailable) {
-                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+            Column(modifier = Modifier.padding(16.dp)) {
+                if (displayResult.ingredients.isEmpty()) {
+                    Text(
+                        text = if (isManualEntry) "Catatan ini tidak memiliki rincian bahan." else "Rincian bahan belum tersedia untuk hasil ini.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 } else {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+                    displayResult.ingredients.forEachIndexed { index, ing ->
+                        // Only label what the backend actually reported.
+                        val sourceLabel = when {
+                            !ing.source?.sourceName.isNullOrBlank() -> "Sumber: ${ing.source.sourceName}"
+                            ing.nutritionSourceType.equals("ai", ignoreCase = true) -> "Sumber: Estimasi AI"
+                            !ing.nutritionSourceType.isNullOrBlank() -> "Sumber: ${ing.nutritionSourceType}"
+                            else -> null
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = ing.foodName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${ing.nutrition?.energyKcal.formatKcalInt()} kkal",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            if (sourceLabel != null) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFF4F6F8)
+                                ) {
+                                    Text(
+                                        text = sourceLabel,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF64748B),
+                                        fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (index < displayResult.ingredients.size - 1) {
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFE2E8F0)))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Data nilai gizi merujuk pada basis data pangan resmi (TKPI/USDA) jika tersedia, atau estimasi model AI untuk hidangan campuran.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 15.sp
+                    )
                 }
-            ) {
-                Text(
-                    text = sourceText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isUnavailable) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
             }
         }
+
+        // AI disclaimer: small caption under the item list, kept apart from the nutrition note.
+        if (aiDisclaimer != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = aiDisclaimer,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 15.sp,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
+
+        if (personalNote != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                color = ProteinBgColor,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCCFBF1))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Catatan Gizi",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF115E59)
+                    )
+                    Text(
+                        text = personalNote,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF115E59),
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Action Buttons (Equal Width Modifier.weight(1f).height(52.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (onCorrect != null) {
+                SecondaryButton(
+                    text = "Koreksi",
+                    onClick = onCorrect,
+                    icon = Icons.Outlined.Edit,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            PrimaryButton(
+                text = primaryActionText,
+                onClick = onScanAgain,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Bottom spacer to ensure buttons are not covered by FAB
+        Spacer(modifier = Modifier.height(104.dp))
     }
 }
 
 @Composable
-private fun PortionPresetChip(
+private fun PortionChip(
     label: String,
-    weightText: String,
-    selected: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
     Surface(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (selected) 2.dp else 0.dp
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) ProteinBgColor else MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.5.dp,
+            if (isSelected) Primary else Color(0xFFE2E8F0)
+        ),
+        shadowElevation = 1.dp
     ) {
-        Column(
-            modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = weightText,
                 style = MaterialTheme.typography.labelSmall,
-                color = contentColor.copy(alpha = 0.75f),
-                maxLines = 1
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) Primary else MaterialTheme.colorScheme.onSurface,
+                maxLines = 2,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }
 }
 
-private data class MicroNutrient(
-    val label: String,
-    val value: Double,
-    val unit: String,
-    val dailyTarget: Double
-)
+private fun scaleScanResult(original: ScanResult, servingWeightG: Double): ScanResult {
+    val baseWeight = original.servingWeightG.takeIf { it > 0.0 } ?: original.defaultConsumedWeightG
+    val ratio = (servingWeightG / baseWeight).coerceIn(0.05, 5.0)
 
-/** Formats grams as "25 g" or "2,5 g" (Indonesian decimal comma). */
-private fun formatGrams(value: Double): String {
-    return if (kotlin.math.abs(value - value.roundToInt()) < 0.1) {
-        "${value.roundToInt()} g"
-    } else {
-        String.format(java.util.Locale("id", "ID"), "%.1f g", value)
-    }
-}
-
-private fun scaleScanResult(original: ScanResult, newWeightG: Double): ScanResult {
-    val baseWeight = if (original.servingWeightG > 0) original.servingWeightG else 1.0
-    val scaleFactor = newWeightG / baseWeight
-
-    val scaledTotalNutrition = Nutrition(
-        energyKcal = original.totalNutrition.energyKcal?.let { it * scaleFactor },
-        proteinG = original.totalNutrition.proteinG?.let { it * scaleFactor },
-        fatG = original.totalNutrition.fatG?.let { it * scaleFactor },
-        carbohydrateG = original.totalNutrition.carbohydrateG?.let { it * scaleFactor },
-        sugarG = original.totalNutrition.sugarG?.let { it * scaleFactor },
-        saturatedFatG = original.totalNutrition.saturatedFatG?.let { it * scaleFactor },
-        cholesterolMg = original.totalNutrition.cholesterolMg?.let { it * scaleFactor },
-        fiberG = original.totalNutrition.fiberG?.let { it * scaleFactor },
-        sodiumMg = original.totalNutrition.sodiumMg?.let { it * scaleFactor },
-        calciumMg = original.totalNutrition.calciumMg?.let { it * scaleFactor },
-        ironMg = original.totalNutrition.ironMg?.let { it * scaleFactor }
+    val scaledNutrition = Nutrition(
+        energyKcal = original.totalNutrition.energyKcal?.let { it * ratio },
+        proteinG = original.totalNutrition.proteinG?.let { it * ratio },
+        fatG = original.totalNutrition.fatG?.let { it * ratio },
+        carbohydrateG = original.totalNutrition.carbohydrateG?.let { it * ratio },
+        sugarG = original.totalNutrition.sugarG?.let { it * ratio },
+        saturatedFatG = original.totalNutrition.saturatedFatG?.let { it * ratio },
+        cholesterolMg = original.totalNutrition.cholesterolMg?.let { it * ratio },
+        fiberG = original.totalNutrition.fiberG?.let { it * ratio },
+        sodiumMg = original.totalNutrition.sodiumMg?.let { it * ratio },
+        calciumMg = original.totalNutrition.calciumMg?.let { it * ratio },
+        ironMg = original.totalNutrition.ironMg?.let { it * ratio }
     )
 
     val scaledIngredients = original.ingredients.map { ing ->
         ing.copy(
-            estimatedWeightG = ing.estimatedWeightG * scaleFactor,
+            estimatedWeightG = ing.estimatedWeightG * ratio,
             nutrition = ing.nutrition?.let { n ->
                 Nutrition(
-                    energyKcal = n.energyKcal?.let { it * scaleFactor },
-                    proteinG = n.proteinG?.let { it * scaleFactor },
-                    fatG = n.fatG?.let { it * scaleFactor },
-                    carbohydrateG = n.carbohydrateG?.let { it * scaleFactor },
-                    sugarG = n.sugarG?.let { it * scaleFactor },
-                    saturatedFatG = n.saturatedFatG?.let { it * scaleFactor },
-                    cholesterolMg = n.cholesterolMg?.let { it * scaleFactor },
-                    fiberG = n.fiberG?.let { it * scaleFactor },
-                    sodiumMg = n.sodiumMg?.let { it * scaleFactor },
-                    calciumMg = n.calciumMg?.let { it * scaleFactor },
-                    ironMg = n.ironMg?.let { it * scaleFactor }
+                    energyKcal = n.energyKcal?.let { it * ratio },
+                    proteinG = n.proteinG?.let { it * ratio },
+                    fatG = n.fatG?.let { it * ratio },
+                    carbohydrateG = n.carbohydrateG?.let { it * ratio },
+                    sugarG = n.sugarG?.let { it * ratio },
+                    saturatedFatG = n.saturatedFatG?.let { it * ratio },
+                    cholesterolMg = n.cholesterolMg?.let { it * ratio },
+                    fiberG = n.fiberG?.let { it * ratio },
+                    sodiumMg = n.sodiumMg?.let { it * ratio },
+                    calciumMg = n.calciumMg?.let { it * ratio },
+                    ironMg = n.ironMg?.let { it * ratio }
                 )
             }
         )
     }
 
     return original.copy(
-        servingWeightG = newWeightG,
-        totalNutrition = scaledTotalNutrition,
+        consumedWeightG = servingWeightG,
+        totalNutrition = scaledNutrition,
         ingredients = scaledIngredients
     )
 }

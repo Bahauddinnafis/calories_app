@@ -1,5 +1,6 @@
 package com.nafis.calories.data.remote.dto
 
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
 /** Backend API response DTO for scan endpoint matching API contract. */
@@ -31,8 +32,33 @@ data class ScanResponseDto(
     @SerializedName("errors")
     val errors: List<ScanErrorDto>? = null,
 
+    @SerializedName("suggested_add_ons")
+    val suggestedAddOns: List<SuggestedAddOnDto>? = null,
+
+    /** Personal note about this meal against the user's targets. */
+    @SerializedName("nutrition_note")
+    val nutritionNote: String? = null,
+
+    /** AI-estimation disclaimer. */
+    @SerializedName("ai_notice")
+    val aiNotice: String? = null,
+
     @SerializedName("created_at")
     val createdAt: String
+)
+
+data class SuggestedAddOnDto(
+    @SerializedName("add_on_id")
+    val addOnId: String? = null,
+
+    @SerializedName("name")
+    val name: String? = null,
+
+    @SerializedName("default_weight_g")
+    val defaultWeightG: Double? = null,
+
+    @SerializedName("energy_kcal")
+    val energyKcal: Double? = null
 )
 
 data class ScanErrorDto(
@@ -131,11 +157,14 @@ data class NutritionDto(
 )
 
 data class NutritionSourceDto(
+    @SerializedName("name")
+    val name: String? = null,
+
     @SerializedName("source_name")
-    val sourceName: String,
+    val sourceName: String? = null,
 
     @SerializedName("source_version")
-    val sourceVersion: String,
+    val sourceVersion: String? = null,
 
     @SerializedName("source_food_id")
     val sourceFoodId: String? = null
@@ -200,14 +229,19 @@ data class NutritionProvenanceDto(
     @SerializedName("display_ai_notice")
     val displayAiNotice: Boolean? = null,
 
+    /** Older contract: `{ "id": "...", "en": "..." }`; a plain string is accepted too. */
     @SerializedName("ai_notice")
-    val aiNotice: AiNoticeDto? = null
-)
-
-data class AiNoticeDto(
-    @SerializedName("id")
-    val id: String? = null,
-
-    @SerializedName("en")
-    val en: String? = null
-)
+    val aiNotice: JsonElement? = null
+) {
+    val aiNoticeText: String?
+        get() = when {
+            aiNotice == null || aiNotice.isJsonNull -> null
+            aiNotice.isJsonPrimitive -> aiNotice.asString
+            aiNotice.isJsonObject -> aiNotice.asJsonObject.let { obj ->
+                listOf("id", "en").firstNotNullOfOrNull { key ->
+                    obj.get(key)?.takeIf { it.isJsonPrimitive }?.asString
+                }
+            }
+            else -> null
+        }?.trim()?.takeIf { it.isNotEmpty() }
+}

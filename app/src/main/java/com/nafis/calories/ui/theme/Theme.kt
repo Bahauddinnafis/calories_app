@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
 private val LightColorScheme = lightColorScheme(
     primary = Primary,
     onPrimary = Color.White,
-    primaryContainer = Primary.copy(alpha = 0.12f),
+    primaryContainer = PrimarySoft,
     onPrimaryContainer = PrimaryVariant,
     secondary = PrimaryVariant,
     onSecondary = Color.White,
@@ -29,7 +29,7 @@ private val LightColorScheme = lightColorScheme(
 private val DarkColorScheme = darkColorScheme(
     primary = PrimaryDark,
     onPrimary = DarkBackground,
-    primaryContainer = PrimaryDark.copy(alpha = 0.16f),
+    primaryContainer = Primary.copy(alpha = 0.2f),
     onPrimaryContainer = PrimaryDark,
     secondary = PrimaryDark,
     onSecondary = DarkBackground,
@@ -41,8 +41,8 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = DarkTextPrimary,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkTextSecondary,
-    outline = Color(0xFF334155),
-    outlineVariant = Color(0xFF475569)
+    outline = Color(0xFF1E293B),
+    outlineVariant = Color(0xFF334155)
 )
 
 @Composable

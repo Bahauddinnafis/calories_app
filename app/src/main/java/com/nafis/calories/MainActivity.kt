@@ -14,26 +14,36 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,32 +56,38 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import com.nafis.calories.data.local.mapper.HistoryMapper
+import com.nafis.calories.data.model.DailyTargets
 import com.nafis.calories.ui.components.PrimaryButton
 import com.nafis.calories.ui.components.SecondaryButton
-import com.nafis.calories.data.model.DailyTargets
 import com.nafis.calories.ui.history.HistoryScreen
+import com.nafis.calories.ui.history.HistoryViewModel
+import com.nafis.calories.ui.onboarding.OnboardingScreen
 import com.nafis.calories.ui.profile.ProfileScreen
 import com.nafis.calories.ui.profile.ProfileViewModel
-import com.nafis.calories.ui.history.HistoryViewModel
-import com.nafis.calories.ui.scan.CameraScreen
+import com.nafis.calories.ui.profile.TargetScreen
 import com.nafis.calories.ui.scan.CorrectionScreen
 import com.nafis.calories.ui.scan.HomeScreen
+import com.nafis.calories.ui.scan.MultiModeScannerScreen
 import com.nafis.calories.ui.scan.NutritionUnavailableScreen
-import com.nafis.calories.ui.scan.RealTimeScanScreen
 import com.nafis.calories.ui.scan.ResultScreen
 import com.nafis.calories.ui.scan.ScanUiState
 import com.nafis.calories.ui.scan.ScanViewModel
 import com.nafis.calories.ui.theme.CaloriesTheme
+import com.nafis.calories.ui.theme.Primary
+import com.nafis.calories.ui.theme.PrimarySoft
 import com.nafis.calories.ui.theme.Spacing
 
 class MainActivity : ComponentActivity() {
@@ -97,8 +113,26 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
 
-                    if (cameraPermissionState.status.isGranted) {
-                        MainApp(scanViewModel, historyViewModel, profileViewModel)
+                    val savedProfile by profileViewModel.profile.collectAsState()
+                    var forceOnboarding by remember { mutableStateOf(false) }
+
+                    val showOnboarding = forceOnboarding || savedProfile == null || !(savedProfile?.isOnboardingCompleted ?: false)
+
+                    if (showOnboarding) {
+                        OnboardingScreen(
+                            initialProfile = savedProfile,
+                            onComplete = { newProfile ->
+                                profileViewModel.saveProfile(newProfile)
+                                forceOnboarding = false
+                            }
+                        )
+                    } else if (cameraPermissionState.status.isGranted) {
+                        MainApp(
+                            scanViewModel = scanViewModel,
+                            historyViewModel = historyViewModel,
+                            profileViewModel = profileViewModel,
+                            onStartOnboarding = { forceOnboarding = true }
+                        )
                     } else {
                         var hasRequested by rememberSaveable { mutableStateOf(false) }
                         val permanentlyDenied = hasRequested && !cameraPermissionState.status.shouldShowRationale
@@ -123,6 +157,7 @@ class MainActivity : ComponentActivity() {
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
     object Home : Screen("home", "Beranda", Icons.Filled.Home)
     object History : Screen("history", "Riwayat", Icons.AutoMirrored.Filled.List)
+    object Target : Screen("target", "Target", Icons.Default.TrackChanges)
     object Profile : Screen("profile", "Profil", Icons.Filled.Person)
 }
 
@@ -130,7 +165,8 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 fun MainApp(
     scanViewModel: ScanViewModel,
     historyViewModel: HistoryViewModel,
-    profileViewModel: ProfileViewModel
+    profileViewModel: ProfileViewModel,
+    onStartOnboarding: () -> Unit
 ) {
     var selectedScreen by remember { mutableStateOf<Screen>(Screen.Home) }
     val scanUiState by scanViewModel.uiState.collectAsState()
@@ -139,7 +175,6 @@ fun MainApp(
     val isMainHome = (selectedScreen == Screen.Home) && (scanUiState is ScanUiState.Home)
     BackHandler(enabled = !isMainHome) {
         if (scanUiState is ScanUiState.Editing) {
-            // Back from the correction form returns to the result, not all the way home.
             scanViewModel.cancelCorrection()
         } else if (scanUiState !is ScanUiState.Home) {
             scanViewModel.resetState()
@@ -158,63 +193,176 @@ fun MainApp(
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp
-                ) {
-                    NavigationBarItem(
-                        icon = { Icon(Screen.Home.icon, contentDescription = null) },
-                        label = { Text(Screen.Home.label) },
-                        selected = selectedScreen == Screen.Home,
-                        onClick = {
-                            selectedScreen = Screen.Home
-                            if (scanUiState !is ScanUiState.Home) {
-                                scanViewModel.resetState()
-                            }
+                CustomBottomBar(
+                    selectedScreen = selectedScreen,
+                    onScreenSelected = { screen ->
+                        selectedScreen = screen
+                        if (scanUiState !is ScanUiState.Home) {
+                            scanViewModel.resetState()
                         }
-                    )
-                    NavigationBarItem(
-                        icon = { Icon(Screen.History.icon, contentDescription = null) },
-                        label = { Text(Screen.History.label) },
-                        selected = selectedScreen == Screen.History,
-                        onClick = { selectedScreen = Screen.History }
-                    )
-                    NavigationBarItem(
-                        icon = { Icon(Screen.Profile.icon, contentDescription = null) },
-                        label = { Text(Screen.Profile.label) },
-                        selected = selectedScreen == Screen.Profile,
-                        onClick = { selectedScreen = Screen.Profile }
-                    )
-                }
+                    },
+                    onScanClick = {
+                        scanViewModel.navigateToRealTimeScan()
+                    }
+                )
             }
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            when (selectedScreen) {
-                Screen.Home -> ScanApp(
+            if (scanUiState !is ScanUiState.Home) {
+                ScanApp(
                     viewModel = scanViewModel,
                     historyViewModel = historyViewModel,
                     dailyTargets = dailyTargets,
                     onOpenProfile = { selectedScreen = Screen.Profile }
                 )
-                Screen.History -> HistoryScreen(
-                    viewModel = historyViewModel,
-                    onHistoryItemClick = { history, bitmap ->
-                        val scanResult = HistoryMapper.toDomain(history)
-                        scanViewModel.showHistoryDetail(scanResult, bitmap)
-                        selectedScreen = Screen.Home
-                    },
-                    dailyTargetKcal = dailyTargets.energyKcal
+            } else {
+                when (selectedScreen) {
+                    Screen.Home -> ScanApp(
+                        viewModel = scanViewModel,
+                        historyViewModel = historyViewModel,
+                        dailyTargets = dailyTargets,
+                        onOpenProfile = { selectedScreen = Screen.Profile }
+                    )
+                    Screen.History -> HistoryScreen(
+                        viewModel = historyViewModel,
+                        onHistoryItemClick = { history, bitmap ->
+                            val scanResult = HistoryMapper.toDomain(history)
+                            scanViewModel.showHistoryDetail(scanResult, bitmap)
+                            selectedScreen = Screen.Home
+                        },
+                        dailyTargetKcal = dailyTargets.energyKcal
+                    )
+                    Screen.Target -> TargetScreen(
+                        viewModel = profileViewModel,
+                        onEditProfiling = onStartOnboarding
+                    )
+                    Screen.Profile -> ProfileScreen(
+                        viewModel = profileViewModel,
+                        onEditProfiling = onStartOnboarding
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CustomBottomBar(
+    selectedScreen: Screen,
+    onScreenSelected: (Screen) -> Unit,
+    onScanClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                NavBarItem(
+                    screen = Screen.Home,
+                    selected = selectedScreen == Screen.Home,
+                    onClick = { onScreenSelected(Screen.Home) },
+                    modifier = Modifier.weight(1f)
                 )
-                Screen.Profile -> ProfileScreen(
-                    viewModel = profileViewModel,
-                    onSaved = {
-                        selectedScreen = Screen.Home
-                        if (scanUiState !is ScanUiState.Home) scanViewModel.resetState()
-                    }
+                NavBarItem(
+                    screen = Screen.History,
+                    selected = selectedScreen == Screen.History,
+                    onClick = { onScreenSelected(Screen.History) },
+                    modifier = Modifier.weight(1f)
+                )
+                // Spacer for center floating FAB
+                Spacer(modifier = Modifier.weight(1f))
+                NavBarItem(
+                    screen = Screen.Target,
+                    selected = selectedScreen == Screen.Target,
+                    onClick = { onScreenSelected(Screen.Target) },
+                    modifier = Modifier.weight(1f)
+                )
+                NavBarItem(
+                    screen = Screen.Profile,
+                    selected = selectedScreen == Screen.Profile,
+                    onClick = { onScreenSelected(Screen.Profile) },
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
+
+        // Center Floating Scan FAB
+        Surface(
+            modifier = Modifier
+                .size(58.dp)
+                .offset(y = (-4).dp)
+                .border(4.dp, MaterialTheme.colorScheme.background, RoundedCornerShape(20.dp))
+                .clickable { onScanClick() },
+            shape = RoundedCornerShape(20.dp),
+            color = Primary,
+            shadowElevation = 6.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.CenterFocusWeak,
+                    contentDescription = "Scan Makanan",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun NavBarItem(
+    screen: Screen,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val contentColor = if (selected) Primary else Color(0xFF94A3B8)
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 36.dp, height = 24.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (selected) PrimarySoft else Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = screen.icon,
+                contentDescription = screen.label,
+                tint = contentColor,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = screen.label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = contentColor,
+            fontSize = 11.sp
+        )
     }
 }
 
@@ -251,18 +399,18 @@ fun ScanApp(
                     viewModel.showHistoryDetail(scanResult, bitmap)
                 },
                 dailyTargets = dailyTargets,
-                onSetTargetClick = onOpenProfile
+                onSetTargetClick = onOpenProfile,
+                scanViewModel = viewModel
             )
         }
         is ScanUiState.Camera -> {
-            CameraScreen(
-                onImageCaptured = { bitmap -> viewModel.scanFood(bitmap) },
-                onError = { viewModel.resetState() },
+            MultiModeScannerScreen(
+                viewModel = viewModel,
                 onBack = { viewModel.resetState() }
             )
         }
         is ScanUiState.RealTimeScan -> {
-            RealTimeScanScreen(
+            MultiModeScannerScreen(
                 viewModel = viewModel,
                 onBack = { viewModel.resetState() }
             )
@@ -296,7 +444,7 @@ fun ScanApp(
                 scanResult = state.scanResult,
                 capturedImage = state.capturedImage,
                 onScanAgain = { viewModel.resetState() },
-                primaryActionText = if (state.fromHistory) "Tutup" else "Scan Makanan Lain",
+                primaryActionText = if (state.fromHistory) "Tutup" else "Simpan ke Catatan",
                 dailyEnergyKcal = dailyTargets.energyKcal,
                 loggedAt = state.scanResult.timestamp.takeIf { state.fromHistory },
                 onPortionChanged = { viewModel.updateConsumedPortion(scanId, it) },
@@ -332,6 +480,10 @@ fun ScanApp(
                 original = state.original,
                 isSubmitting = state.isSubmitting,
                 errorMessage = state.errorMessage,
+                estimateKcal = state.estimateKcal,
+                isEstimating = state.isEstimating,
+                estimateUnavailable = state.estimateUnavailable,
+                onCorrectionChanged = { viewModel.previewCorrection(it) },
                 onSubmit = { viewModel.submitCorrection(it) },
                 onCancel = { viewModel.cancelCorrection() }
             )
@@ -407,7 +559,7 @@ private fun CameraPermissionScreen(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Izinkan akses kamera",
+            text = "Izinkan akses camera",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
