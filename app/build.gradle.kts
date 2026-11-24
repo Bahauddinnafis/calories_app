@@ -38,15 +38,22 @@ android {
         }
 
         // Load backend base URL from local.properties (default for emulator)
-        val backendUrl = if (localPropertiesFile.exists()) {
+        var rawBackendUrl = if (localPropertiesFile.exists()) {
             val properties = Properties()
             localPropertiesFile.inputStream().use { stream ->
                 properties.load(stream)
             }
-            properties.getProperty("BACKEND_BASE_URL", "http://10.0.2.2:8000/")
+            properties.getProperty("BACKEND_BASE_URL", "http://10.0.2.2:8000/").trim()
         } else {
             "http://10.0.2.2:8000/"
         }
+        if (!rawBackendUrl.startsWith("http://") && !rawBackendUrl.startsWith("https://")) {
+            rawBackendUrl = "https://$rawBackendUrl"
+        }
+        if (!rawBackendUrl.endsWith("/")) {
+            rawBackendUrl = "$rawBackendUrl/"
+        }
+        val backendUrl = rawBackendUrl
 
         buildConfigField("String", "GEMINI_API_KEY", "\"$apiKey\"")
         buildConfigField("String", "BACKEND_BASE_URL", "\"$backendUrl\"")
