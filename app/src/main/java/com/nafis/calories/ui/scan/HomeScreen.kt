@@ -93,10 +93,14 @@ import com.nafis.calories.data.repository.PackagedProductRepository
 import com.nafis.calories.data.repository.UserProfileRepository
 import com.nafis.calories.data.repository.WaterTrackerRepository
 import com.nafis.calories.ui.history.HistoryViewModel
+import com.nafis.calories.ui.theme.CarbBgColor
 import com.nafis.calories.ui.theme.CarbColor
 import com.nafis.calories.ui.theme.FatColor
 import com.nafis.calories.ui.theme.Primary
+import com.nafis.calories.ui.theme.ProteinBgColor
 import com.nafis.calories.ui.theme.ProteinColor
+import com.nafis.calories.ui.theme.WaterBgColor
+import com.nafis.calories.ui.theme.WaterColor
 import com.nafis.calories.ui.theme.Spacing
 import com.nafis.calories.utils.DailyTotals
 import com.nafis.calories.utils.formatKcalInt
@@ -270,7 +274,7 @@ fun HomeScreen(
                 modifier = Modifier
                     .size(38.dp)
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
-                    .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.Default.Person,
@@ -300,9 +304,10 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         val progressFraction = (consumedKcal.toFloat() / targetKcal.coerceAtLeast(1)).coerceIn(0f, 1f)
+                        val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             drawCircle(
-                                color = Color(0xFFF1F5F9),
+                                color = trackColor,
                                 radius = size.minDimension / 2 - 6.dp.toPx(),
                                 style = Stroke(width = 11.dp.toPx())
                             )
@@ -352,7 +357,7 @@ fun HomeScreen(
                             Text("$consumedKcal kkal", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Primary)
                         }
 
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -363,13 +368,13 @@ fun HomeScreen(
                             Surface(
                                 modifier = Modifier.clickable { waterRepo.incrementWater(1) },
                                 shape = RoundedCornerShape(8.dp),
-                                color = Color(0xFFE0F2FE)
+                                color = WaterBgColor
                             ) {
                                 Text(
                                     text = "+ 250ml",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0284C7),
+                                    color = WaterColor,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                 )
                             }
@@ -378,7 +383,7 @@ fun HomeScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Row(
@@ -844,8 +849,8 @@ fun DailyInsightCard(insight: DailyInsightResponseDto) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDFA)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCCFBF1)),
+        colors = CardDefaults.cardColors(containerColor = ProteinBgColor),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.3f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
@@ -888,7 +893,7 @@ fun DailyInsightCard(insight: DailyInsightResponseDto) {
                     text = insight.headline?.trim()?.takeIf { it.isNotEmpty() } ?: "Insight Harian",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF115E59),
+                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -899,7 +904,7 @@ fun DailyInsightCard(insight: DailyInsightResponseDto) {
                     Text(
                         text = message,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF134E4A),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 20.sp
                     )
                 }
@@ -907,13 +912,13 @@ fun DailyInsightCard(insight: DailyInsightResponseDto) {
             if (!insight.hydrationNudge.isNullOrBlank()) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFCCFBF1)
+                    color = Primary.copy(alpha = 0.15f)
                 ) {
                     Text(
                         text = "💧 ${insight.hydrationNudge}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Medium,
-                        color = Color(0xFF0F766E),
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                     )
                 }
@@ -947,13 +952,13 @@ fun QuickActionBar(
                 Surface(
                     modifier = Modifier.size(34.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFEFF6FF)
+                    color = CarbBgColor
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = null,
-                            tint = Color(0xFF3B82F6),
+                            tint = CarbColor,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -994,7 +999,7 @@ fun QuickActionBar(
                 Surface(
                     modifier = Modifier.size(34.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFFF0FDFA)
+                    color = ProteinBgColor
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
@@ -1058,7 +1063,7 @@ private fun MacroBarItem(
                 .fillMaxWidth()
                 .height(6.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFF1F5F9))
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         ) {
             Box(
                 modifier = Modifier
@@ -1146,7 +1151,7 @@ private fun MealRecommendationTile(
             Surface(
                 modifier = Modifier.size(42.dp),
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFF0FDFA)
+                color = ProteinBgColor
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(

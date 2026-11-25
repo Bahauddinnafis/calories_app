@@ -544,7 +544,7 @@ fun MultiModeScannerScreen(
             ModalBottomSheet(
                 onDismissRequest = { showGallerySheet = false },
                 sheetState = gallerySheetState,
-                containerColor = Color.White,
+                containerColor = MaterialTheme.colorScheme.surface,
                 scrimColor = Color.Black.copy(alpha = 0.6f)
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
@@ -558,12 +558,12 @@ fun MultiModeScannerScreen(
                                 text = "Pilih Foto dari Galeri",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0F172A)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
                                 text = "Foto dari galeri perangkat",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF475569)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         IconButton(onClick = { showGallerySheet = false }) {
@@ -581,8 +581,8 @@ fun MultiModeScannerScreen(
                                 galleryPickerLauncher.launch("image/*")
                             },
                         shape = RoundedCornerShape(14.dp),
-                        color = Color(0xFFF8FAFC),
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFE2E8F0))
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline)
                     ) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -599,12 +599,13 @@ fun MultiModeScannerScreen(
                                 Text(
                                     text = "Buka Galeri",
                                     style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
                                     text = "Pilih foto makanan dari galeri perangkat",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color(0xFF64748B)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }

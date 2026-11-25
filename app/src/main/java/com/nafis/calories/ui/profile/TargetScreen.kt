@@ -279,7 +279,7 @@ fun TargetScreen(
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -298,7 +298,7 @@ fun TargetScreen(
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

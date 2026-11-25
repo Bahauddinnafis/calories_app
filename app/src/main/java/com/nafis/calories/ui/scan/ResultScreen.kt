@@ -144,7 +144,7 @@ fun ResultScreen(
                 modifier = Modifier
                     .size(38.dp)
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
-                    .border(1.dp, Color(0xFFE2E8F0), CircleShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -156,7 +156,7 @@ fun ResultScreen(
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surface,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Text(
                     text = if (isManualEntry) "Detail Catatan" else "Hasil Analisis Cloud AI",
@@ -459,12 +459,12 @@ fun ResultScreen(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Surface(
                                     shape = RoundedCornerShape(6.dp),
-                                    color = Color(0xFFF4F6F8)
+                                    color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     Text(
                                         text = sourceLabel,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF64748B),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 10.sp,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
@@ -473,12 +473,12 @@ fun ResultScreen(
                         }
 
                         if (index < displayResult.ingredients.size - 1) {
-                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFE2E8F0)))
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
@@ -509,22 +509,22 @@ fun ResultScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
                 color = ProteinBgColor,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCCFBF1))
+                border = androidx.compose.foundation.BorderStroke(1.dp, Primary.copy(alpha = 0.3f))
             ) {
                 Column(
                     modifier = Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = "Catatan Gizi",
+                        text = "Catat Gizi",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF115E59)
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = personalNote,
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF115E59),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
                 }
@@ -572,7 +572,7 @@ private fun PortionChip(
         color = if (isSelected) ProteinBgColor else MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
-            if (isSelected) Primary else Color(0xFFE2E8F0)
+            if (isSelected) Primary else MaterialTheme.colorScheme.outline
         ),
         shadowElevation = 1.dp
     ) {

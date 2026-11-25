@@ -228,7 +228,7 @@ fun OnboardingScreen(
                         .height(4.dp)
                         .clip(CircleShape),
                     color = Primary,
-                    trackColor = Color(0xFFE2E8F0)
+                    trackColor = MaterialTheme.colorScheme.outlineVariant
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -522,7 +522,7 @@ private fun Step2Biometrics(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFF4F6F8), shape = RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(14.dp))
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
@@ -531,7 +531,7 @@ private fun Step2Biometrics(
                                 .weight(1f)
                                 .height(40.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (sex == Sex.MALE) Color.White else Color.Transparent)
+                                .background(if (sex == Sex.MALE) MaterialTheme.colorScheme.surface else Color.Transparent)
                                 .clickable { onSexChanged(Sex.MALE) },
                             contentAlignment = Alignment.Center
                         ) {
@@ -539,7 +539,7 @@ private fun Step2Biometrics(
                                 text = "Laki-laki",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (sex == Sex.MALE) Primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (sex == Sex.MALE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Box(
@@ -547,7 +547,7 @@ private fun Step2Biometrics(
                                 .weight(1f)
                                 .height(40.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(if (sex == Sex.FEMALE) Color.White else Color.Transparent)
+                                .background(if (sex == Sex.FEMALE) MaterialTheme.colorScheme.surface else Color.Transparent)
                                 .clickable { onSexChanged(Sex.FEMALE) },
                             contentAlignment = Alignment.Center
                         ) {
@@ -555,7 +555,7 @@ private fun Step2Biometrics(
                                 text = "Perempuan",
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (sex == Sex.FEMALE) Primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (sex == Sex.FEMALE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -748,10 +748,10 @@ private fun Step4Dietary(
                             val selected = selectedDietary.contains(pref)
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (selected) ProteinBgColor else Color.White,
+                                color = if (selected) ProteinBgColor else MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.5.dp,
-                                    if (selected) Primary else Color(0xFFE2E8F0)
+                                    if (selected) Primary else MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.clickable { onDietaryToggled(pref) }
                             ) {
@@ -759,7 +759,7 @@ private fun Step4Dietary(
                                     text = pref,
                                     style = MaterialTheme.typography.labelMedium,
                                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (selected) Primary else MaterialTheme.colorScheme.onSurface,
+                                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp)
                                 )
                             }
@@ -783,10 +783,10 @@ private fun Step4Dietary(
                             val selected = selectedAllergies.contains(allergy)
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (selected) DangerBgColor else Color.White,
+                                color = if (selected) DangerBgColor else MaterialTheme.colorScheme.surfaceVariant,
                                 border = androidx.compose.foundation.BorderStroke(
                                     1.5.dp,
-                                    if (selected) DangerColor else Color(0xFFE2E8F0)
+                                    if (selected) DangerColor else MaterialTheme.colorScheme.outline
                                 ),
                                 modifier = Modifier.clickable { onAllergyToggled(allergy) }
                             ) {
@@ -961,7 +961,7 @@ private fun Step5Schedule(
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1252,7 +1252,7 @@ private fun ChoiceTile(
             Surface(
                 modifier = Modifier.size(44.dp),
                 shape = RoundedCornerShape(13.dp),
-                color = if (isSelected) Primary else Color(0xFFF4F6F8)
+                color = if (isSelected) Primary else MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
@@ -1285,7 +1285,7 @@ private fun ChoiceTile(
                     .size(20.dp)
                     .clip(CircleShape)
                     .background(if (isSelected) Primary else Color.Transparent)
-                    .border(2.dp, if (isSelected) Primary else Color(0xFFCBD5E1), CircleShape),
+                    .border(2.dp, if (isSelected) Primary else MaterialTheme.colorScheme.outline, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (isSelected) {

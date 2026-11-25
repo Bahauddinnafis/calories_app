@@ -119,14 +119,14 @@ fun ProfileScreen(
                 Surface(
                     modifier = Modifier.size(52.dp),
                     shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF0F172A)
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = avatarInitials,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color(0xFF5EEAD4)
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -210,7 +210,7 @@ fun ProfileScreen(
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -229,7 +229,7 @@ fun ProfileScreen(
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -248,7 +248,7 @@ fun ProfileScreen(
                     )
                 }
 
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFFF1F5F9)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

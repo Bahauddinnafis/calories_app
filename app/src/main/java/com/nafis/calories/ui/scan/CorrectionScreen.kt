@@ -61,6 +61,8 @@ import com.nafis.calories.data.model.ScanCorrectionRules
 import com.nafis.calories.data.model.ScanResult
 import com.nafis.calories.data.model.SuggestedAddOn
 import com.nafis.calories.ui.components.PrimaryButton
+import com.nafis.calories.ui.theme.DangerBgColor
+import com.nafis.calories.ui.theme.DangerColor
 import com.nafis.calories.ui.theme.Primary
 import com.nafis.calories.ui.theme.ProteinBgColor
 import com.nafis.calories.ui.theme.Spacing
@@ -262,7 +264,7 @@ fun CorrectionScreen(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
@@ -314,13 +316,13 @@ fun CorrectionScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                color = Color(0xFFFFF1F2),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE11D48))
+                color = DangerBgColor,
+                border = androidx.compose.foundation.BorderStroke(1.dp, DangerColor)
             ) {
                 Text(
                     text = errorMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFFE11D48),
+                    color = DangerColor,
                     modifier = Modifier.padding(12.dp)
                 )
             }
@@ -370,7 +372,7 @@ private fun IngredientStepperRow(
 
         Row(
             modifier = Modifier
-                .background(Color(0xFFF4F6F8), RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp))
                 .padding(3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -400,7 +402,7 @@ private fun IngredientStepperRow(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "Hapus ${item.foodName}",
-                tint = Color(0xFF94A3B8),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -418,7 +420,7 @@ private fun StepperButton(
             .size(28.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp),
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 1.dp
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -488,7 +490,7 @@ private fun AddOnChip(
         color = if (isSelected) ProteinBgColor else MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
-            if (isSelected) Primary else Color(0xFFE2E8F0)
+            if (isSelected) Primary else MaterialTheme.colorScheme.outline
         ),
         modifier = Modifier.clickable(onClick = onToggle)
     ) {
