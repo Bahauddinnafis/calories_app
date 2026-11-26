@@ -1,0 +1,230 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 11,
+    "identityHash": "a0363744d3d823d4450eb1a4165a2b4e",
+    "entities": [
+      {
+        "tableName": "scan_history_v2",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `scanId` TEXT NOT NULL, `mealName` TEXT NOT NULL, `servingWeightG` REAL NOT NULL, `singleServingWeightG` REAL, `servingUnitName` TEXT, `servingUnitCount` INTEGER, `servingConfidence` REAL NOT NULL, `ingredientsJson` TEXT NOT NULL, `totalEnergyKcal` REAL, `totalProteinG` REAL, `totalFatG` REAL, `totalCarbohydrateG` REAL, `totalSugarG` REAL, `totalSaturatedFatG` REAL, `totalCholesterolMg` REAL, `totalFiberG` REAL, `totalSodiumMg` REAL, `totalCalciumMg` REAL, `totalIronMg` REAL, `isComplete` INTEGER NOT NULL, `missingNutrientsJson` TEXT NOT NULL, `overallConfidence` REAL NOT NULL, `uncertaintyNotesJson` TEXT NOT NULL, `imagePath` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `consumedWeightG` REAL, `mealType` TEXT, `isUserCorrected` INTEGER NOT NULL DEFAULT 0, `aiNoticeText` TEXT, `addOnsJson` TEXT NOT NULL DEFAULT '[]', `logSource` TEXT, `referenceId` TEXT, `remoteId` TEXT, `syncStatus` TEXT NOT NULL DEFAULT 'pending', `updatedAt` INTEGER NOT NULL DEFAULT 0, `nutritionNote` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scanId",
+            "columnName": "scanId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mealName",
+            "columnName": "mealName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "servingWeightG",
+            "columnName": "servingWeightG",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "singleServingWeightG",
+            "columnName": "singleServingWeightG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "servingUnitName",
+            "columnName": "servingUnitName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "servingUnitCount",
+            "columnName": "servingUnitCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "servingConfidence",
+            "columnName": "servingConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ingredientsJson",
+            "columnName": "ingredientsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalEnergyKcal",
+            "columnName": "totalEnergyKcal",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalProteinG",
+            "columnName": "totalProteinG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalFatG",
+            "columnName": "totalFatG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalCarbohydrateG",
+            "columnName": "totalCarbohydrateG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalSugarG",
+            "columnName": "totalSugarG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalSaturatedFatG",
+            "columnName": "totalSaturatedFatG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalCholesterolMg",
+            "columnName": "totalCholesterolMg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalFiberG",
+            "columnName": "totalFiberG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalSodiumMg",
+            "columnName": "totalSodiumMg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalCalciumMg",
+            "columnName": "totalCalciumMg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "totalIronMg",
+            "columnName": "totalIronMg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "isComplete",
+            "columnName": "isComplete",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "missingNutrientsJson",
+            "columnName": "missingNutrientsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "overallConfidence",
+            "columnName": "overallConfidence",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "uncertaintyNotesJson",
+            "columnName": "uncertaintyNotesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imagePath",
+            "columnName": "imagePath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "consumedWeightG",
+            "columnName": "consumedWeightG",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "mealType",
+            "columnName": "mealType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isUserCorrected",
+            "columnName": "isUserCorrected",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "aiNoticeText",
+            "columnName": "aiNoticeText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "addOnsJson",
+            "columnName": "addOnsJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          },
+          {
+            "fieldPath": "logSource",
+            "columnName": "logSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "referenceId",
+            "columnName": "referenceId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "remoteId",
+            "columnName": "remoteId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "syncStatus",
+            "columnName": "syncStatus",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'pending'"
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "nutritionNote",
+            "columnName": "nutritionNote",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a0363744d3d823d4450eb1a4165a2b4e')"
+    ]
+  }
+}

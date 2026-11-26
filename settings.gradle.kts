@@ -17,4 +17,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Calories"
-include(":app")
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+include(":androidApp")
+include(":composeApp")
